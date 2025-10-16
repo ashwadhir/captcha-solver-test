@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAPTCHA Solver</title>
+    <!-- Tesseract.js CDN: Required for OCR functionality -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            margin: 20px 0;
+        }
+        h1 {
+            color: #0056b3;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+        p {
+            margin-bottom: 10px;
+        }
+        #captcha-image {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            display: block;
+            margin: 0 auto 20px auto;
+            background-color: #f9f9f9;
+        }
+        #status-message {
+            margin-top: 15px;
+            font-size: 1em;
+            color: #555;
+            min-height: 20px; /* Prevent layout shift */
+        }
+        #solved-text {
+            margin-top: 20px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #28a745;
+            background-color: #e9ffe9;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #28a745;
+            min-height: 25px; /* Prevent layout shift */
+        }
+        #solved-text:empty {
+            display: none; /* Hide if empty, for cleaner initial state */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CAPTCHA Solver</h1>
+        <p>This page uses Tesseract.js to automatically read text from the attached captcha image.</p>
+        <img id="captcha-image" alt="Captcha image to be solved">
+        <p id="status-message" aria-live="polite">Initializing application...</p>
+        <p id="solved-text"></p>
+    </div>
+
+    <script>
+        // CRITICAL RULE 1: ALL custom JavaScript logic MUST be wrapped in a DOMContentLoaded event listener.
+        document.addEventListener('DOMContentLoaded', () => {
+            // CRITICAL RULE 3: Before interacting with any DOM element, verify that it exists.
+            const captchaImage = document.querySelector('#captcha-image');
+            const statusMessage = document.querySelector('#status-message');
+            const solvedTextElement = document.querySelector('#solved-text');
+
+            if (!captchaImage || !statusMessage || !solvedTextElement) {
+                console.error('Error: Required DOM elements (#captcha-image, #status-message, or #solved-text) not found.');
+                if (statusMessage) statusMessage.textContent = 'Error: Missing critical page elements for functionality.';
+                return; // Stop execution if critical elements are missing
+            }
+
+            // CRITICAL RULE 5: User Feedback - initial loading state
+            statusMessage.textContent = 'Loading captcha image...';
+
+            // ATTACHMENTS: sample.png, URL: data:image/png;base64,...
+            // CRITICAL RULE 4: When an attachment URL begins with `data:`, you MUST assign it directly
+            // to the `src` attribute of an element (like an `<img>` tag).
+            // You MUST NOT use `fetch()` or any other network request to "load" a `data:` URI.
+            const imageDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAABDAgMAAACqPEyOAAAACVBMVEUAAAD///8AAABzxoO3AAAAAXRSTlMAsObYZgAAAQlJREFUWMPt2DFOw0AUBuGvBYQQQgghL4Hgd+A4OQdI5A0U3Qc4gBNw7fxh2u22pPAhBda/aaXVfI/ntFAuK+HDoqgmR/Lg1Zhmpsg8NqYY2YQpY5n9Z45582K2MhIeBPPgZm/Zf8yL8YfA9eB+a/iswP018tD8k/PbA/CbwQ/g9aL+d+G2B+WlgnPg/AvMvwQPhn0n4LcK/BfCPgH8S/BfAP+FfBPZfgf8K+CeBfwt8yPCfA/8V8D8B/g3wv0P+K+AfAf8G+D+G/xfgf+J/Afwv4H8F/A/g/0H+H8D/Bvhfef4r4F8H/gr4f8H/CvgfQv4L4N+D/w/4f8H/CvgfQv4L4N+D/w/4nwH/S/A/Af8H8B/BfwD+C/A/Af8H8B/BfwD+K/CfA/8V8D8B/g3wvwf+K+AfAf8G+H+e+G+A/xL8F8A/4V8E9l+B/wr4J4F/C3zI8J8D/xXwz4b/Bfgfgv8k/FbhXwL+EfBPgv8C+Gfg/y3wL8J/B+YXgR/Dfw7MLwM/hf8UzA8DP8Y/G/4PzE8DP8Y/G/4PzE8DP8afGfjHwTz4GVv2X/Oi/GHwPXgfmn4rzPwvfA8eB+a/isw/JkZF5/pS9g1zYI4sYZZxoy5Y5oA8aP+AH/p5QJ1+k8EAAAAAElFTkSuQmCC";
+            captchaImage.src = imageDataURI;
+
+            // CRITICAL RULE 1 (cont.): Any code that processes an image MUST be placed inside an image.onload callback.
+            captchaImage.onload = async () => {
+                statusMessage.textContent = 'Image loaded. Preparing OCR engine...';
+                solvedTextElement.textContent = ''; // Clear any previous or default text
+
+                try {
+                    // Tesseract.js is available globally via the CDN script tag.
+                    const { createWorker } = Tesseract;
+
+                    // CRITICAL RULE 5: User Feedback - provide detailed loading state using Tesseract.js logger
+                    const worker = await createWorker('eng', 1, {
+                        logger: m => {
+                            if (!statusMessage) return; // DOM Safety for logger callback
+                            if (m.status === 'recognizing') {
+                                const progress = (m.progress * 100).toFixed(0);
+                                statusMessage.textContent = `Solving CAPTCHA... (${progress}%)`;
+                            } else if (m.status === 'loading tesseract core') {
+                                statusMessage.textContent = `Loading Tesseract core (${(m.progress * 100).toFixed(0)}%)...`;
+                            } else if (m.status === 'loading language traineddata') {
+                                statusMessage.textContent = `Loading English language data (${(m.progress * 100).toFixed(0)}%)...`;
+                            } else if (m.status === 'initializing api') {
+                                statusMessage.textContent = 'Initializing OCR API...';
+                            } else if (m.status === 'initialized api') {
+                                statusMessage.textContent = 'OCR engine initialized.';
+                            } else if (m.status === 'loading models') { // Specific to Tesseract.js v5+
+                                statusMessage.textContent = `Loading OCR models (${(m.progress * 100).toFixed(0)}%)...`;
+                            } else {
+                                statusMessage.textContent = `Tesseract status: ${m.status.charAt(0).toUpperCase() + m.status.slice(1)}...`;
+                            }
+                        }
+                    });
+
+                    statusMessage.textContent = 'OCR engine ready. Recognizing text from image...';
+
+                    // CRITICAL RULE 2: ALL `fetch()` calls or other network requests MUST be wrapped in a `try...catch` block.
+                    // Tesseract.js `recognize` involves async operations and can fail, so it's wrapped.
+                    const { data: { text } } = await worker.recognize(captchaImage);
+
+                    if (text && text.trim().length > 0) {
+                        // ACCEPTANCE CRITERION: document.querySelector("#solved-text").textContent.length > 0
+                        solvedTextElement.textContent = `Solved Text: "${text.trim()}"`;
+                        statusMessage.textContent = 'CAPTCHA solved successfully!';
+                    } else {
+                        solvedTextElement.textContent = 'No text detected from the image.';
+                        statusMessage.textContent = 'CAPTCHA solving completed, but no discernible text was found.';
+                    }
+
+                    // Clean up Tesseract.js worker resources
+                    await worker.terminate();
+                    console.log('Tesseract worker terminated.');
+
+                } catch (error) {
+                    // CRITICAL RULE 2: If an error occurs, you MUST display a user-friendly error message on the page.
+                    console.error('Error during CAPTCHA solving process:', error);
+                    if (statusMessage) {
+                        statusMessage.textContent = `Error solving CAPTCHA: ${error.message}. Please check the browser console for more details.`;
+                    }
+                    if (solvedTextElement) {
+                        solvedTextElement.textContent = 'Failed to solve CAPTCHA.'; // Clear or set specific error
+                    }
+                }
+            };
+
+            // Handle potential errors if the image fails to load.
+            // This is less likely for data URIs but good practice.
+            captchaImage.onerror = () => {
+                if (statusMessage) {
+                    statusMessage.textContent = 'Error: Failed to load captcha image. The image source might be invalid.';
+                }
+                console.error('Failed to load captcha image from data URI.');
+            };
+        });
+    </script>
+</body>
+</html>
